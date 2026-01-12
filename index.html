@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoFence Master - Draw & Monitor Geofences</title>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            scroll-behavior: smooth;
+        }
+        #map { 
+            height: 70vh; 
+            width: 100%;
+        }
+        .notification {
+            animation: slideIn 0.5s ease-in-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        .hero-gradient {
+            background: linear-gradient(135deg, #4c6ef5, #2d62ed);
+        }
+        .feature-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        .marker-pin {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            background: #4c6ef5;
+            position: absolute;
+            transform: rotate(-45deg);
+            left: 50%;
+            top: 50%;
+            margin: -15px 0 0 -15px;
+        }
+        .marker-pin::after {
+            content: '';
+            width: 14px;
+            height: 14px;
+            margin: 8px 0 0 8px;
+            background: #fff;
+            position: absolute;
+            border-radius: 50%;
+        }
+        .custom-marker {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: white;
+        }
+        .connected-device-badge {
+            background: #4c6ef5;
+            border-radius: 50%;
+            color: white;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+        .quick-connect {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip-text {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <nav class="bg-blue-600 text-white p-4 sticky top-0 z-20">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold"><i class="bi bi-geo-alt-fill"></i> GeoFence Master</h1>
+            <div class="flex space-x-4">
+                <button id="connectDevicesBtn" class="bg-blue-500 hover:bg-blue-700 px-4 py-2 rounded flex items-center">
+                    <i class="bi bi-link mr-2"></i> Connect Devices
+                </button>
+                <button id="helpBtn" class="bg-blue-500 hover:bg-blue-700 px-4 py-2 rounded flex items-center">
+                    <i class="bi bi-question-circle mr-2"></i> Help
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <section id="landing" class="hero-gradient text-white py-16">
+        <div class="container mx-auto px-4">
+            <div class="max-w-3xl mx-auto text-center">
+                <h1 class="text-4xl md:text-5xl font-bold mb-4">Define Your Digital Boundaries</h1>
+                <p class="text-xl mb-8">Create custom geofences and get notified when you or others enter and exit your defined areas</p>
+                <button id="startBtn" class="bg-white text-blue-600 hover:bg-gray-100 font-bold py-3 px-8 rounded-full text-lg shadow-lg transition-all">
+                    Start Creating Geofences
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="py-16 bg-white">
+        <div class="container mx-auto px-4">
+            <h2 class="text-3xl font-bold text-center mb-12">Powerful Geofencing Features</h2>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="feature-card bg-blue-50 p-6 rounded-lg shadow-md">
+                    <div class="text-blue-600 text-4xl mb-4"><i class="bi bi-pencil-square"></i></div>
+                    <h3 class="text-xl font-semibold mb-2">Easy Drawing Tools</h3>
+                    <p class="text-gray-600">Create custom shapes to define your geofences exactly as you need them</p>
+                </div>
+                <div class="feature-card bg-blue-50 p-6 rounded-lg shadow-md">
+                    <div class="text-blue-600 text-4xl mb-4"><i class="bi bi-bell"></i></div>
+                    <h3 class="text-xl font-semibold mb-2">Real-time Notifications</h3>
+                    <p class="text-gray-600">Get instant alerts when you or connected devices enter or exit your geofences</p>
+                </div>
+                <div class="feature-card bg-blue-50 p-6 rounded-lg shadow-md">
+                    <div class="text-blue-600 text-4xl mb-4"><i class="bi bi-people"></i></div>
+                    <h3 class="text-xl font-semibold mb-2">Device Connections</h3>
+                    <p class="text-gray-600">Monitor family members, friends or team members with secure device linking</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <main id="app" class="container mx-auto p-4 hidden pb-20">
+        <div class="bg-white rounded-lg shadow-lg p-4 mb-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Draw Your Geofence</h2>
+                <div class="flex space-x-2">
+                    <div class="tooltip-container">
+                        <button id="drawPolygonBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
+                            <i class="bi bi-pentagon"></i> Polygon
+                        </button>
+                        <span class="tooltip-text">Draw a custom shape</span>
+                    </div>
+                    <div class="tooltip-container">
+                        <button id="drawCircleBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
+                            <i class="bi bi-circle"></i> Circle
+                        </button>
+                        <span class="tooltip-text">Draw a circular fence</span>
+                    </div>
+                    <div class="tooltip-container">
+                        <button id="drawRectangleBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
+                            <i class="bi bi-square"></i> Rectangle
+                        </button>
+                        <span class="tooltip-text">Draw a rectangular fence</span>
+                    </div>
+                </div>
+            </div>
+            <div id="map" class="rounded-lg"></div>
+        </div>
+
+        <!-- Connected Devices Section (Quick View) -->
+        <div class="bg-white rounded-lg shadow-lg p-4 mb-4">
+            <h3 class="text-lg font-semibold mb-4">Connected Devices</h3>
+            <div id="quickDevicesList" class="flex flex-wrap gap-3">
+                <!-- Quick view of connected devices will appear here -->
+                <div class="flex items-center px-4 py-2 bg-blue-100 rounded-full text-blue-800">
+                    <div class="connected-device-badge mr-2">ME</div>
+                    <span>Your Device</span>
+                </div>
+                <!-- Other devices will be added dynamically -->
+            </div>
+            <button id="addNewDeviceBtn" class="mt-3 text-blue-600 hover:text-blue-800 flex items-center text-sm">
+                <i class="bi bi-plus-circle mr-1"></i> Add New Device
+            </button>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+            <div class="bg-white rounded-lg shadow-lg p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Active Geofences</h3>
+                    <button id="addGeofenceBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                        <i class="bi bi-plus-circle"></i> Add New
+                    </button>
+                </div>
+                <div id="geofenceList" class="space-y-2">
+                    <!-- Geofences will be listed here -->
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Notifications</h3>
+                    <button id="clearNotificationsBtn" class="text-gray-500 hover:text-gray-700 text-sm">
+                        <i class="bi bi-trash"></i> Clear All
+                    </button>
+                </div>
+                <div id="notificationList" class="space-y-2 max-h-60 overflow-y-auto">
+                    <!-- Notifications will appear here -->
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 bg-white rounded-lg shadow-lg p-4">
+            <h3 class="text-lg font-semibold mb-4">Connected Devices</h3>
+            <div id="connectedDevicesList" class="space-y-2">
+                <!-- Connected devices will be listed here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Quick Connect Button -->
+    <div class="quick-connect">
+        <button id="quickConnectBtn" class="bg-blue-600 hover:bg-blue-700 text-white h-14 w-14 rounded-full shadow-lg flex items-center justify-center text-xl">
+            <i class="bi bi-link-45deg"></i>
+        </button>
+    </div>
+
+    <!-- Connection Modal -->
+    <div id="connectModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Connect with Other Devices</h2>
+                <button id="closeConnectModalBtn" class="text-gray-500 hover:text-gray-700">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <div class="mb-6">
+                    <label class="block text-gray-700 mb-2">Your Connection Code</label>
+                    <div class="flex">
+                        <input type="text" id="myConnectionCode" class="border rounded py-2 px-3 bg-gray-100 w-full text-center text-lg font-bold tracking-wider" readonly value="">
+                        <button id="copyCodeBtn" class="ml-2 bg-gray-200 hover:bg-gray-300 px-3 rounded flex items-center">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">Share this code with others to connect</p>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="otherPersonCode" class="block text-gray-700 mb-2">Connect to Someone</label>
+                    <div class="flex">
+                        <input type="text" id="otherPersonCode" class="border rounded py-2 px-3 w-full" placeholder="Enter connection code">
+                        <button id="connectBtn" class="ml-2 bg-blue-600 text-white hover:bg-blue-700 px-4 rounded flex items-center">
+                            Connect
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Connect Options -->
+                <div class="mt-6">
+                    <h3 class="font-medium mb-2">Quick Connect</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="quick-connect-option bg-blue-50 hover:bg-blue-100 p-3 rounded text-left" data-code="FAMILY">
+                            <div class="font-medium text-blue-800">Family</div>
+                            <div class="text-xs text-gray-500">Connect with family members</div>
+                        </button>
+                        <button class="quick-connect-option bg-blue-50 hover:bg-blue-100 p-3 rounded text-left" data-code="FRIEND">
+                            <div class="font-medium text-blue-800">Friend</div>
+                            <div class="text-xs text-gray-500">Connect with a friend</div>
+                        </button>
+                        <button class="quick-connect-option bg-blue-50 hover:bg-blue-100 p-3 rounded text-left" data-code="COWORKER">
+                            <div class="font-medium text-blue-800">Coworker</div>
+                            <div class="text-xs text-gray-500">Connect with colleague</div>
+                        </button>
+                        <button class="quick-connect-option bg-blue-50 hover:bg-blue-100 p-3 rounded text-left" data-code="TEAM">
+                            <div class="font-medium text-blue-800">Team</div>
+                            <div class="text-xs text-gray-500">Connect with team members</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Landing page functionality
+        document.getElementById('startBtn').addEventListener('click', () => {
+            document.getElementById('landing').classList.add('hidden');
+            document.getElementById('features').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            initializeMap();
+        });
+
+        // Global variables
+        let map;
+        let drawnItems;
+        let geofences = [];
+        let connectedDevices = [];
+        let deviceMarkers = new Map();
+        let myDeviceId = generateDeviceId();
+        let myConnectionCode = generateConnectionCode();
+        let myLocationMarker;
+        let lastKnownLocation;
+        let currentDrawingType = null;
+        
+        // Initialize the map
+        function initializeMap() {
+            // Initialize the map if it hasn't been already
+            if (!map) {
+                map = L.map('map').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+                // Initialize drawing controls
+                drawnItems = new L.FeatureGroup();
+                map.addLayer(drawnItems);
+
+                const drawControl = new L.Control.Draw({
+                    draw: {
+                        polygon: true,
+                        circle: true,
+                        rectangle: true,
+                        polyline: false,
+                        marker: false,
+                        circlemarker: false
+                    },
+                    edit: {
+                        featureGroup: drawnItems
+                    }
+                });
+                map.addControl(drawControl);
+
+                // Get user's location
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition((position) => {
+                        lastKnownLocation = [position.coords.latitude, position.coords.longitude];
+                        map.setView(lastKnownLocation, 13);
+                        
+                        // Add marker for user's location
+                        const customIcon = createCustomIcon('ME', '#4c6ef5');
+                        myLocationMarker = L.marker(lastKnownLocation, {icon: customIcon})
+                            .addTo(map)
+                            .bindPopup("Your current location")
+                            .openPopup();
+                            
+                        startLocationTracking();
+                    });
+                }
+
+                // Handle drawn shapes
+                map.on('draw:created', (e) => {
+                    const layer = e.layer;
+                    drawnItems.addLayer(layer);
+                    
+                    promptGeofenceDetails(layer);
+                    currentDrawingType = null;
+                });
+            }
+        }
+
+        // Drawing tool buttons
+        document.getElementById('drawPolygonBtn')?.addEventListener('click', () => {
+            currentDrawingType = 'polygon';
+            new L.Draw.Polygon(map).enable();
+            addNotification("Start drawing a polygon fence by clicking on the map");
+        });
+        
+        document.getElementById('drawCircleBtn')?.addEventListener('click', () => {
+            currentDrawingType = 'circle';
+            new L.Draw.Circle(map).enable();
+            addNotification("Click and drag to create a circular fence");
+        });
+        
+        document.getElementById('drawRectangleBtn')?.addEventListener('click', () => {
+            currentDrawingType = 'rectangle';
+            new L.Draw.Rectangle(map).enable();
+            addNotification("Click and drag to create a rectangular fence");
+        });
+
+        function createCustomIcon(label, color) {
+            return L.divIcon({
+                className: 'custom-marker',
+                html: `<div class="marker-pin" style="background:${color}"></div><span class="text-xs" style="z-index:10;margin-top:-5px;position:relative;">${label}</span>`,
+                iconSize: [30, 42],
+                iconAnchor: [15, 42],
+                popupAnchor: [0, -35]
+            });
+        }
+
+        function promptGeofenceDetails(layer) {
+            const geofenceName = prompt("Name your geofence:");
+            if (geofenceName) {
+                const geofence = {
+                    id: Date.now(),
+                    name: geofenceName,
+                    layer: layer,
+                    monitorDevices: [...connectedDevices.map(d => d.id), myDeviceId]
+                };
+                geofences.push(geofence);
+                updateGeofenceList();
+                addNotification(`Geofence "${geofenceName}" created successfully`);
+            } else {
+                drawnItems.removeLayer(layer);
+            }
+        }
+
+        function updateGeofenceList() {
+            const list = document.getElementById('geofenceList');
+            list.innerHTML = '';
+            
+            if (geofences.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 p-2">No geofences created yet</p>';
+                return;
+            }
+            
+            geofences.forEach(fence => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-3 bg-gray-100 rounded hover:bg-gray-200';
+                div.innerHTML = `
+                    <div>
+                        <div class="font-medium">${fence.name}</div>
+                        <div class="text-xs text-gray-500">${fence.monitorDevices.length} devices monitored</div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="locateGeofence(${fence.id})" class="text-blue-500 hover:text-blue-700" title="View on map">
+                            <i class="bi bi-geo-alt"></i>
+                        </button>
+                        <button onclick="editGeofence(${fence.id})" class="text-blue-500 hover:text-blue-700" title="Edit name">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button onclick="deleteGeofence(${fence.id})" class="text-red-500 hover:text-red-700" title="Delete">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function locateGeofence(id) {
+            const fence = geofences.find(f => f.id === id);
+            if (fence && fence.layer) {
+                // Zoom to the fence
+                map.fitBounds(fence.layer.getBounds ? fence.layer.getBounds() : fence.layer.getLatLng().toBounds(fence.layer.getRadius()));
+                
+                // Scroll to map
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function editGeofence(id) {
+            const fence = geofences.find(f => f.id === id);
+            if (fence) {
+                const newName = prompt("Update geofence name:", fence.name);
+                if (newName) {
+                    fence.name = newName;
+                    updateGeofenceList();
+                }
+            }
+        }
+
+        function deleteGeofence(id) {
+            const fence = geofences.find(f => f.id === id);
+            if (fence) {
+                if (confirm(`Are you sure you want to delete the geofence "${fence.name}"?`)) {
+                    drawnItems.removeLayer(fence.layer);
+                    geofences = geofences.filter(f => f.id !== id);
+                    updateGeofenceList();
+                    addNotification(`Geofence "${fence.name}" deleted`);
+                }
+            }
+        }
+
+        function addNotification(message) {
+            const list = document.getElementById('notificationList');
+            const notification = document.createElement('div');
+            notification.className = 'notification p-3 bg-blue-100 rounded flex justify-between items-center';
+            notification.innerHTML = `
+                <div class="flex-grow">
+                    <div>${message}</div>
+                    <div class="text-xs text-gray-500">${new Date().toLocaleTimeString()}</div>
+                </div>
+                <button class="delete-notification-btn text-gray-400 hover:text-gray-600">
+                    <i class="bi bi-x"></i>
+                </button>
+            `;
+            
+            // Add event listener to delete button
+            notification.querySelector('.delete-notification-btn').addEventListener('click', () => {
+                notification.remove();
+            });
+            
+            list.insertBefore(notification, list.firstChild);
+        }
+
+        function startLocationTracking() {
+            let lastStates = new Map(); // Track last state for each geofence
+
+            navigator.geolocation.watchPosition((position) => {
+                const userLocation = [position.coords.latitude, position.coords.longitude];
+                lastKnownLocation = userLocation;
+                
+                // Update user location marker
+                if (myLocationMarker) {
+                    myLocationMarker.setLatLng(userLocation);
+                }
+                
+                geofences.forEach(fence => {
+                    if (fence.monitorDevices.includes(myDeviceId)) {
+                        const isInside = isPointInGeofence(userLocation, fence.layer);
+                        const lastState = lastStates.get(fence.id);
+                        
+                        if (lastState === undefined) {
+                            lastStates.set(fence.id, isInside);
+                        } else if (lastState !== isInside) {
+                            const action = isInside ? 'entered' : 'exited';
+                            addNotification(`You have ${action} the geofence: ${fence.name}`);
+                            
+                            // Simulate notifications from connected devices
+                            simulateConnectedDevicesNotifications(fence, action);
+                            
+                            lastStates.set(fence.id, isInside);
+                        }
+                    }
+                });
+
+                // Update connected device locations (simulated movement)
+                updateConnectedDevicesLocations();
+            }, null, { enableHighAccuracy: true });
+        }
+
+        function updateConnectedDevicesLocations() {
+            connectedDevices.forEach(device => {
+                if (!device.location) {
+                    // Initialize random location near user if none exists
+                    device.location = [
+                        lastKnownLocation[0] + (Math.random() * 0.02 - 0.01),
+                        lastKnownLocation[1] + (Math.random() * 0.02 - 0.01)
+                    ];
+                } else {
+                    // Simulate movement (random drift)
+                    device.location = [
+                        device.location[0] + (Math.random() * 0.001 - 0.0005),
+                        device.location[1] + (Math.random() * 0.001 - 0.0005)
+                    ];
+                }
+                
+                // Update or create marker
+                if (deviceMarkers.has(device.id)) {
+                    deviceMarkers.get(device.id).setLatLng(device.location);
+                } else {
+                    const customIcon = createCustomIcon(device.name.substring(0, 2).toUpperCase(), '#f59e0b');
+                    const marker = L.marker(device.location, {icon: customIcon})
+                        .addTo(map)
+                        .bindPopup(device.name);
+                    deviceMarkers.set(device.id, marker);
+                }
+                
+                // Check if device is in any geofence
+                checkDeviceGeofenceStatus(device);
+            });
+        }
+
+        function checkDeviceGeofenceStatus(device) {
+            geofences.forEach(fence => {
+                if (fence.monitorDevices.includes(device.id)) {
+                    const isInside = isPointInGeofence(device.location, fence.layer);
+                    
+                    // If this is first check, initialize status
+                    if (device.geofenceStatus === undefined) {
+                        device.geofenceStatus = new Map();
+                    }
+                    
+                    const lastState = device.geofenceStatus.get(fence.id);
+                    
+                    if (lastState === undefined) {
+                        device.geofenceStatus.set(fence.id, isInside);
+                    } else if (lastState !== isInside) {
+                        const action = isInside ? 'entered' : 'exited';
+                        addNotification(`${device.name} has ${action} the geofence: ${fence.name}`);
+                        device.geofenceStatus.set(fence.id, isInside);
+                    }
+                }
+            });
+        }
+
+        function simulateConnectedDevicesNotifications(fence, action) {
+            // For demonstration purposes, occasionally show notifications from connected devices
+            connectedDevices.forEach(device => {
+                if (fence.monitorDevices.includes(device.id) && Math.random() > 0.7) {
+                    setTimeout(() => {
+                        addNotification(`${device.name} has ${action} the geofence: ${fence.name}`);
+                    }, Math.random() * 5000);
+                }
+            });
+        }
+
+        function isPointInGeofence(point, layer) {
+            if (layer instanceof L.Circle) {
+                const center = layer.getLatLng();
+                const radius = layer.getRadius();
+                const distance = map.distance(center, point);
+                return distance <= radius;
+            } else if (layer instanceof L.Rectangle || layer instanceof L.Polygon) {
+                const polyCoords = layer.getLatLngs()[0].map(coord => [coord.lng, coord.lat]);
+                const pt = turf.point([point[1], point[0]]);
+                const poly = turf.polygon([polyCoords]);
+                return turf.booleanPointInPolygon(pt, poly);
+            }
+            return false;
+        }
+
+        // Help button functionality
+        document.getElementById('helpBtn').addEventListener('click', () => {
+            alert(`
+How to use GeoFence Master:
+
+1. Use the drawing tools above the map to create a geofence
+2. Choose between polygon, circle, or rectangle
+3. Click points on the map to draw your shape
+4. Double-click to finish drawing
+5. Name your geofence when prompted
+6. You'll be notified when entering or exiting the geofence
+7. Manage your geofences in the list below the map
+8. Connect with other devices using the Connect button or Quick Connect
+9. View connected device locations directly on the map
+            `);
+        });
+
+        // Add Geofence button handler
+        document.getElementById('addGeofenceBtn').addEventListener('click', () => {
+            // Focus the map and show a tooltip
+            map.scrollIntoView({ behavior: 'smooth' });
+            addNotification('Select a drawing tool above the map to create a new geofence');
+        });
+
+        // Clear notifications button
+        document.getElementById('clearNotificationsBtn').addEventListener('click', () => {
+            document.getElementById('notificationList').innerHTML = '';
+        });
+
+        // Connect Devices Modal
+        function openConnectModal() {
+            document.getElementById('connectModal').classList.remove('hidden');
+            document.getElementById('myConnectionCode').value = myConnectionCode;
+            updateConnectedDevicesList();
+        }
+
+        document.getElementById('connectDevicesBtn').addEventListener('click', openConnectModal);
+        document.getElementById('quickConnectBtn').addEventListener('click', openConnectModal);
+        document.getElementById('addNewDeviceBtn').addEventListener('click', openConnectModal);
+
+        document.getElementById('closeConnectModalBtn').addEventListener('click', () => {
+            document.getElementById('connectModal').classList.add('hidden');
+        });
+
+        document.getElementById('copyCodeBtn').addEventListener('click', () => {
+            const codeInput = document.getElementById('myConnectionCode');
+            codeInput.select();
+            document.execCommand('copy');
+            addNotification('Connection code copied to clipboard!');
+        });
+
+        document.getElementById('connectBtn').addEventListener('click', connectDevice);
+
+        // Quick connect options
+        document.querySelectorAll('.quick-connect-option').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const code = e.currentTarget.getAttribute('data-code');
+                document.getElementById('otherPersonCode').value = code;
+                connectDevice();
+            });
+        });
+
+        function connectDevice() {
+            const codeInput = document.getElementById('otherPersonCode');
+            const code = codeInput.value.trim();
+            
+            if (!code) {
+                alert('Please enter a connection code');
+                return;
+            }
+            
+            // Simulate connection process
+            const isSuccess = Math.random() > 0.2; // 80% success rate for demo
+            
+            if (isSuccess) {
+                const newDevice = {
+                    id: generateDeviceId(),
+                    name: getDeviceNameForCode(code),
+                    code: code,
+                    location: lastKnownLocation ? [
+                        lastKnownLocation[0] + (Math.random() * 0.02 - 0.01),
+                        lastKnownLocation[1] + (Math.random() * 0.02 - 0.01)
+                    ] : null
+                };
+                
+                connectedDevices.push(newDevice);
+                addNotification(`Successfully connected with ${newDevice.name}`);
+                codeInput.value = '';
+                
+                document.getElementById('connectModal').classList.add('hidden');
+                updateConnectedDevicesList();
+                updateQuickDevicesList();
+                
+                // Add device to all existing geofences
+                geofences.forEach(fence => {
+                    fence.monitorDevices.push(newDevice.id);
+                });
+                
+                // Add marker for the new device
+                if (newDevice.location && map) {
+                    const customIcon = createCustomIcon(newDevice.name.substring(0, 2).toUpperCase(), '#f59e0b');
+                    const marker = L.marker(newDevice.location, {icon: customIcon})
+                        .addTo(map)
+                        .bindPopup(newDevice.name);
+                    deviceMarkers.set(newDevice.id, marker);
+                }
+                
+                // Scroll to map
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert('Connection failed. Please check the code and try again.');
+            }
+        }
+
+        function getDeviceNameForCode(code) {
+            // Return appropriate name based on quick connect code or generate random name
+            if (code === 'FAMILY') return "Family Member";
+            if (code === 'FRIEND') return "Friend's Phone";
+            if (code === 'COWORKER') return "Coworker's Device";
+            if (code === 'TEAM') return "Team Member";
+            return generateRandomName();
+        }
+
+        function updateConnectedDevicesList() {
+            const list = document.getElementById('connectedDevicesList');
+            list.innerHTML = '';
+            
+            if (connectedDevices.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 p-2">No devices connected yet. Use "Connect Devices" to start linking.</p>';
+                return;
+            }
+            
+            connectedDevices.forEach(device => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-3 bg-gray-100 rounded mb-2';
+                div.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="bi bi-phone text-blue-500 text-xl mr-3"></i>
+                        <div>
+                            <div class="font-medium">${device.name}</div>
+                            <div class="text-xs text-gray-500">Connected with code: ${device.code}</div>
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="locateDevice('${device.id}')" class="text-blue-500 hover:text-blue-700">
+                            <i class="bi bi-geo-alt"></i>
+                        </button>
+                        <button onclick="disconnectDevice('${device.id}')" class="text-red-500 hover:text-red-700">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function updateQuickDevicesList() {
+            const quickList = document.getElementById('quickDevicesList');
+            // Clear existing devices except for "Your Device"
+            const yourDeviceDiv = quickList.firstElementChild;
+            quickList.innerHTML = '';
+            quickList.appendChild(yourDeviceDiv);
+            
+            // Add connected devices to quick view
+            connectedDevices.forEach(device => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer';
+                div.innerHTML = `
+                    <div class="connected-device-badge mr-2" style="background-color: #f59e0b;">${device.name.substring(0, 2).toUpperCase()}</div>
+                    <span>${device.name}</span>
+                `;
+                div.addEventListener('click', () => locateDevice(device.id));
+                quickList.appendChild(div);
+            });
+        }
+
+        function locateDevice(deviceId) {
+            const device = connectedDevices.find(d => d.id === deviceId);
+            if (device && device.location && map) {
+                map.setView(device.location, 15);
+                if (deviceMarkers.has(deviceId)) {
+                    deviceMarkers.get(deviceId).openPopup();
+                }
+                
+                // Scroll to map
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function disconnectDevice(deviceId) {
+            const device = connectedDevices.find(d => d.id === deviceId);
+            if (device && confirm(`Disconnect from ${device.name}?`)) {
+                // Remove marker from map
+                if (deviceMarkers.has(deviceId)) {
+                    map.removeLayer(deviceMarkers.get(deviceId));
+                    deviceMarkers.delete(deviceId);
+                }
+                
+                // Remove device from array
+                connectedDevices = connectedDevices.filter(d => d.id !== deviceId);
+                updateConnectedDevicesList();
+                updateQuickDevicesList();
+                
+                // Remove the device from all geofences' monitoring lists
+                geofences.forEach(fence => {
+                    fence.monitorDevices = fence.monitorDevices.filter(id => id !== deviceId);
+                });
+                
+                addNotification(`Disconnected from ${device.name}`);
+            }
+        }
+
+        // Utility functions
+        function generateDeviceId() {
+            return 'device_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function generateConnectionCode() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
+        function generateRandomName() {
+            const names = ["Alex's Phone", "Sarah's iPhone", "Mom's Device", "Dad's Android", "Michael's Phone", 
+                           "Emma's Galaxy", "John's Device", "Lisa's Phone", "Kid's Tablet", "Work Phone"];
+            return names[Math.floor(Math.random() * names.length)];
+        }
+
+        // Initialize the app with some sample data
+        function initializeAppWithSampleData() {
+            // Add a sample connected device
+            connectedDevices.push({
+                id: generateDeviceId(),
+                name: "Sample Family Member",
+                code: "123456"
+            });
+            
+            addNotification("Welcome to GeoFence Master! Create your first geofence to get started.");
+            updateQuickDevicesList();
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', initializeAppWithSampleData);
+    </script>
+</body>
+</html>
