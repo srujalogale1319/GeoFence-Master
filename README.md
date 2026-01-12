@@ -33,5 +33,32 @@ This project is built entirely using frontend technologies and runs without any 
 
 ---
 
-## 📂 Project Structure
+## ▶️ How to Run Locally
+
+### Option 1: Simple (Recommended)
+1. Clone the repository
+
+   git clone https://github.com/your-username/geofence-master.git
+   Open login.html in your browser
+
+2. Using Live Server (Optional)
+   If browser blocks geolocation:
+
+npm install -g live-server
+live-server
+
+
+Since this is a **pure frontend project**, no package manager is required.
+
+REQUIREMENTS
+No backend dependencies required.
+
+External libraries loaded via CDN:
+- Leaflet.js
+- Leaflet.draw
+- Turf.js
+- Tailwind CSS
+- Bootstrap 5
+- Bootstrap Icons
+
 
